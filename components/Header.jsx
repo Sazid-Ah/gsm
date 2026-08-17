@@ -1,329 +1,498 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Search,
   ShoppingCart,
-  User,
   PhoneCall,
   ChevronDown,
-  GitCompare,
-  MapPin,
-  Percent,
   Menu,
   X,
   Zap,
   Headphones,
+  Cpu,
+  ArrowRight,
+  Download,
+  LayoutGrid,
 } from "lucide-react";
+import { useCart } from "@/app/context/CartContext";
 
-export default function Header({ searchQuery = "", setSearchQuery, cartCount = 0 }) {
+const QUICK_LINK_ICONS = { grid: LayoutGrid, download: Download };
+
+/**
+ * Site header. All navigation content arrives as props from the root layout,
+ * which reads it from lib/api.js — nothing here is hardcoded catalog data.
+ *
+ * Every nav button and dropdown entry is a filter: it navigates to the listing
+ * route for that category/subcategory, which then renders the filtered set.
+ */
+export default function Header({ nav, site }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const { cartCount } = useCart();
+  const searchInputRef = useRef(null);
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openSubMenu, setOpenSubMenu] = useState(null);
   const [scrolled, setScrolled] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchScope, setSearchScope] = useState("all");
 
-  // Dynamic shadow elevation on scroll
+  const menus = nav?.primary ?? [];
+  const quickLinks = nav?.quickLinks ?? [];
+
+  // Condense the header (utility strip + ticker collapse) once the page scrolls.
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
-    };
-    window.addEventListener("scroll", handleScroll);
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const toggleSubMenu = (menu) => {
-    setOpenSubMenu(openSubMenu === menu ? null : menu);
-  };
+  // Lock body scroll and close the drawer on Escape while it is open.
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const handleKey = (e) => {
+      if (e.key === "Escape") setMobileMenuOpen(false);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [mobileMenuOpen]);
 
-  // Handle Search Submission
+  // "/" jumps to the search field, the way most storefronts behave.
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return;
+      e.preventDefault();
+      searchInputRef.current?.focus();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
+
+  const isActive = (href) => (href === "/" ? pathname === "/" : pathname?.startsWith(href));
+  const toggleSubMenu = (menu) => setOpenSubMenu(openSubMenu === menu ? null : menu);
+  const closeMobileMenu = () => setMobileMenuOpen(false);
+
+  // Search is a filter too: it lands on the listing route, scoped to the
+  // selected category when one is chosen.
   const handleSearch = (e) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      const categoryParam = selectedCategory !== "all" ? `&category=${selectedCategory}` : "";
-      router.push(`/search?q=${encodeURIComponent(searchQuery)}${categoryParam}`);
-      setMobileMenuOpen(false);
-    }
+    const q = searchQuery.trim();
+    if (!q) return;
+    const base = searchScope === "all" ? "/tools" : `/category/${searchScope}`;
+    router.push(`${base}?q=${encodeURIComponent(q)}`);
+    setMobileMenuOpen(false);
   };
 
   return (
-    <header className={`sticky top-0 z-50 w-full font-sans transition-all duration-300 ${scrolled ? "shadow-2xl" : "shadow-md"}`}>
-      {/* 1. TOP UTILITY STRIP */}
-      <div className="bg-slate-900 text-slate-300 text-[11px] py-1.5 px-4 md:px-8 border-b border-slate-800/80">
-        <div className="max-w-[1440px] mx-auto flex justify-between items-center">
-          {/* Left info */}
+    <header
+      className={`sticky top-0 z-50 w-full font-sans transition-shadow duration-300 ${
+        scrolled ? "shadow-2xl shadow-slate-900/20" : "shadow-md"
+      }`}
+    >
+      {/* 1. TOP UTILITY STRIP — collapses away on scroll */}
+      <div
+        className={`overflow-hidden border-b border-slate-800/80 bg-slate-900 text-[11px] text-slate-300 transition-all duration-300 ${
+          scrolled ? "max-h-0 opacity-0" : "max-h-12 opacity-100"
+        }`}
+      >
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between px-4 py-1.5 md:px-8">
           <div className="flex items-center gap-6 font-medium tracking-wide">
-            <a href="tel:+918923744131" className="flex items-center gap-1.5 hover:text-amber-400 transition-colors">
-              <PhoneCall className="w-3 h-3 text-amber-400" />
-              SALES & ENQUIRY: <strong className="text-white hover:text-amber-400">+91 89237 44131</strong>
+            <a
+              href={site.phoneHref}
+              className="group flex items-center gap-1.5 transition-colors hover:text-amber-400"
+            >
+              <PhoneCall className="h-3 w-3 text-amber-400" />
+              <span className="hidden sm:inline">SALES &amp; ENQUIRY:</span>
+              <strong className="text-white transition-colors group-hover:text-amber-400">
+                {site.phone}
+              </strong>
             </a>
-            <span className="hidden md:inline-block text-slate-500">|</span>
-            <a href="https://t.me" target="_blank" rel="noreferrer" className="hover:text-amber-400 transition-colors hidden sm:inline">
+            <span className="hidden text-slate-600 md:inline-block">|</span>
+            <a
+              href={site.telegram}
+              target="_blank"
+              rel="noreferrer"
+              className="hidden transition-colors hover:text-amber-400 sm:inline"
+            >
               Telegram Channel
             </a>
           </div>
 
-          {/* Right account links */}
-          <div className="flex items-center gap-5 text-slate-300">
-            <Link href="/blog" className="hover:text-amber-400 transition-colors hidden lg:inline">Blog</Link>
-            <Link href="/contact" className="hover:text-amber-400 transition-colors hidden sm:inline">Contact Support</Link>
-            <span className="hidden sm:inline text-slate-700">|</span>
-            <Link href="/auth/signin" className="flex items-center gap-1.5 font-semibold text-white hover:text-amber-400 transition-colors">
-              <User className="w-3.5 h-3.5 text-amber-400" />
-              <span>Sign In / Register</span>
-            </Link>
+          <div className="flex items-center gap-2 font-semibold text-emerald-400">
+            <Download className="h-3 w-3" />
+            <span>All files free to download</span>
           </div>
         </div>
       </div>
 
-      {/* 2. MAIN NAV HEADER (DARK GLASS) */}
-      <div className="bg-slate-950 text-white border-b border-slate-800 py-3 px-4 md:px-8">
-        <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-6">
-          
-          {/* Brand Logo & Mobile Toggle */}
-          <div className="flex items-center gap-4">
+      {/* 2. MAIN NAV */}
+      <div
+        className={`border-b border-slate-800 bg-slate-950 px-4 text-white transition-all duration-300 md:px-8 ${
+          scrolled ? "py-2" : "py-3"
+        }`}
+      >
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 lg:gap-6">
+          {/* Brand + mobile toggle */}
+          <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 focus:outline-none"
-              aria-label="Toggle Navigation"
+              className="rounded-lg border border-slate-800 bg-slate-900 p-2 text-slate-300 transition-colors hover:border-slate-700 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 lg:hidden"
+              aria-label="Toggle navigation"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-nav-drawer"
             >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              <Menu className="h-5 w-5" />
             </button>
 
-            <Link href="/" className="group flex items-center gap-2">
-              <div className="bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 font-black text-2xl tracking-wider px-3 py-1 rounded-md shadow-lg shadow-amber-500/10">
-                GSM<span className="text-slate-950">SERVER</span>
-              </div>
+            <Link href="/" className="group flex items-center gap-2.5" aria-label={`${site.name} home`}>
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-950 shadow-lg shadow-amber-500/25 ring-1 ring-amber-300/40 transition-transform duration-300 group-hover:scale-105">
+                <Cpu className="h-5 w-5" />
+              </span>
+              <span className="flex flex-col leading-none">
+                <span className="text-xl font-black tracking-wide">
+                  <span className="text-amber-400">{site.brand.prefix}</span>
+                  <span className="text-white">{site.brand.suffix}</span>
+                </span>
+                <span className="mt-1 hidden text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500 sm:block">
+                  {site.tagline}
+                </span>
+              </span>
             </Link>
           </div>
 
-          {/* Desktop Navigation Links with Mega Menu Hover */}
-          <nav className="hidden lg:flex items-center gap-8 text-xs font-bold uppercase tracking-wider">
-            <Link href="/" className="text-amber-400 hover:text-amber-300 transition-colors">
-              Home
+          {/* Desktop filter nav */}
+          <nav className="hidden items-center gap-6 text-xs font-bold uppercase tracking-wider xl:flex">
+            <Link
+              href="/tools"
+              className={`group relative py-2 transition-colors ${
+                isActive("/tools") ? "text-amber-400" : "text-slate-200 hover:text-amber-400"
+              }`}
+            >
+              All Tools
+              <span
+                className={`absolute -bottom-0.5 left-0 h-0.5 rounded-full bg-amber-400 transition-all duration-300 ${
+                  isActive("/tools") ? "w-full" : "w-0 group-hover:w-full"
+                }`}
+              />
             </Link>
 
-            {/* Submenu Dropdown 1 - Hardware */}
-            <div className="relative group py-2">
-              <Link href="/category/hardware" className="flex items-center gap-1.5 text-slate-200 group-hover:text-amber-400 transition-colors">
-                Mobile Hardware Tool <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:rotate-180 transition-transform" />
-              </Link>
-              <div className="absolute top-full left-0 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform translate-y-2 group-hover:translate-y-0 z-50">
-                <Link href="/category/hardware/microscopes" className="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-amber-400 font-medium normal-case">Microscopes & Cameras</Link>
-                <Link href="/category/hardware/soldering-stations" className="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-amber-400 font-medium normal-case">Soldering Stations</Link>
-                <Link href="/category/hardware/programmers" className="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-amber-400 font-medium normal-case">Programmers & Adapters</Link>
-              </div>
-            </div>
+            {menus.map((menu) => {
+              const active = isActive(menu.href);
+              return (
+                <div key={menu.key} className="group relative py-2">
+                  <Link
+                    href={menu.href}
+                    aria-haspopup="true"
+                    className={`flex items-center gap-1.5 transition-colors ${
+                      active ? "text-amber-400" : "text-slate-200 group-hover:text-amber-400"
+                    }`}
+                  >
+                    {menu.label}
+                    <ChevronDown className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 group-hover:rotate-180 group-focus-within:rotate-180" />
+                    <span
+                      className={`absolute -bottom-0.5 left-0 h-0.5 rounded-full bg-amber-400 transition-all duration-300 ${
+                        active ? "w-full" : "w-0 group-hover:w-full"
+                      }`}
+                    />
+                  </Link>
 
-            {/* Submenu Dropdown 2 - Server */}
-            <div className="relative group py-2">
-              <Link href="/category/server-services" className="flex items-center gap-1.5 text-slate-200 group-hover:text-amber-400 transition-colors">
-                Server Service <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:rotate-180 transition-transform" />
-              </Link>
-              <div className="absolute top-full left-0 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform translate-y-2 group-hover:translate-y-0 z-50">
-                <Link href="/category/server-services/samsung-frp" className="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-amber-400 font-medium normal-case">Samsung FRP Credits</Link>
-                <Link href="/category/server-services/xiaomi-credits" className="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-amber-400 font-medium normal-case">Xiaomi Auth Credits</Link>
-                <Link href="/category/server-services/oppo-realme" className="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-amber-400 font-medium normal-case">Oppo / Realme Server</Link>
-              </div>
-            </div>
-
-            {/* Submenu Dropdown 3 - Software */}
-            <div className="relative group py-2">
-              <Link href="/category/software-tools" className="flex items-center gap-1.5 text-slate-200 group-hover:text-amber-400 transition-colors">
-                Software Box <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:rotate-180 transition-transform" />
-              </Link>
-              <div className="absolute top-full left-0 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform translate-y-2 group-hover:translate-y-0 z-50">
-                <Link href="/category/software-tools/unlocktool" className="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-amber-400 font-medium normal-case">UnlockTool License</Link>
-                <Link href="/category/software-tools/borneo" className="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-amber-400 font-medium normal-case">Borneo Schematics</Link>
-                <Link href="/category/software-tools/umt-dongle" className="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-amber-400 font-medium normal-case">UMT Dongle / Box</Link>
-              </div>
-            </div>
-
-            <Link href="/flash-files" className="text-slate-200 hover:text-amber-400 transition-colors">
-              Flash Files
-            </Link>
+                  <div className="invisible absolute left-0 top-full z-50 w-72 translate-y-2 rounded-2xl border border-slate-800 bg-slate-900/95 p-2 opacity-0 shadow-2xl shadow-black/50 backdrop-blur transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                    <p className="px-3 pb-2 pt-1 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                      Filter by type
+                    </p>
+                    {menu.items.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className="group/item flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-[12px] font-medium normal-case text-slate-300 transition-colors hover:bg-slate-800 hover:text-amber-400 focus:outline-none focus-visible:bg-slate-800 focus-visible:text-amber-400"
+                      >
+                        <span>{item.label}</span>
+                        <span className="flex items-center gap-2">
+                          <span className="rounded-full bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold text-slate-400 group-hover/item:bg-amber-500/15 group-hover/item:text-amber-400">
+                            {item.count}
+                          </span>
+                          <ArrowRight className="h-3.5 w-3.5 -translate-x-1 opacity-0 transition-all duration-200 group-hover/item:translate-x-0 group-hover/item:opacity-100" />
+                        </span>
+                      </Link>
+                    ))}
+                    <Link
+                      href={menu.href}
+                      className="mt-1 flex items-center gap-1.5 border-t border-slate-800 px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-amber-400 transition-colors hover:text-amber-300"
+                    >
+                      View all {menu.count} <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
           </nav>
 
-          {/* Right Action Icons */}
-          <div className="flex items-center gap-5">
-            <a href="tel:+918923744131" className="hidden sm:flex items-center gap-3 bg-slate-900/80 border border-slate-800 rounded-xl px-3.5 py-1.5 hover:border-amber-500/50 transition-colors">
-              <Headphones className="w-5 h-5 text-amber-400" />
-              <div>
-                <span className="block text-slate-400 text-[10px] uppercase font-bold tracking-wider">Live Desk</span>
-                <span className="font-bold text-xs text-white">+91 89237 44131</span>
-              </div>
+          {/* Actions */}
+          <div className="flex items-center gap-3">
+            <a
+              href={site.phoneHref}
+              className="hidden items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/80 px-3.5 py-1.5 transition-colors hover:border-amber-500/50 2xl:flex"
+            >
+              <Headphones className="h-5 w-5 text-amber-400" />
+              <span className="block">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Live Desk
+                </span>
+                <span className="block text-xs font-bold text-white">{site.phone}</span>
+              </span>
             </a>
 
-            <div className="flex items-center gap-3">
-              {/* <Link href="/compare" className="relative p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-amber-400 transition-all">
-                <GitCompare className="w-4 h-4" />
-                <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-slate-950 font-black rounded-full w-4 h-4 text-[10px] flex items-center justify-center">
-                  0
-                </span>
-              </Link> */}
-
-              <Link href="/cart" className="relative flex items-center gap-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold px-4 py-2 rounded-xl hover:brightness-110 shadow-lg shadow-amber-500/20 transition-all text-xs">
-                <ShoppingCart className="w-4 h-4" />
-                <span className="hidden sm:inline">Cart</span>
-                <span className="bg-slate-950 text-amber-400 font-extrabold rounded-full px-2 py-0.5 text-[10px]">
-                  {cartCount}
-                </span>
-              </Link>
-            </div>
+            <Link
+              href="/cart"
+              aria-label={`Cart, ${cartCount} ${cartCount === 1 ? "license" : "licenses"}`}
+              className="relative flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-4 py-2.5 text-xs font-bold text-slate-950 shadow-lg shadow-amber-500/20 transition-all hover:brightness-110 active:scale-95"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              <span className="hidden sm:inline">Cart</span>
+              <span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-extrabold text-amber-400">
+                {cartCount}
+              </span>
+            </Link>
           </div>
         </div>
       </div>
 
-      {/* 3. SEARCH BAR ROW */}
-      <div className="bg-white border-b border-slate-200 py-3 px-4 md:px-8 shadow-sm">
-        <div className="max-w-[1440px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          
-          {/* Search Box */}
-          <form onSubmit={handleSearch} className="w-full flex-1 flex items-center bg-slate-50 border-2 border-slate-200 focus-within:border-amber-500 rounded-xl overflow-hidden transition-all">
-            <div className="relative border-r border-slate-200 hidden md:block">
-              <select 
-                value={selectedCategory} 
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="bg-transparent text-slate-700 text-xs py-2.5 px-4 outline-none appearance-none pr-8 font-semibold cursor-pointer"
+      {/* 3. SEARCH ROW */}
+      <div className="border-b border-slate-200 bg-white px-4 py-3 shadow-sm md:px-8">
+        <div className="mx-auto flex max-w-[1440px] flex-col items-center justify-between gap-3 sm:flex-row sm:gap-4">
+          <form
+            onSubmit={handleSearch}
+            role="search"
+            className="flex w-full flex-1 items-center overflow-hidden rounded-xl border-2 border-slate-200 bg-slate-50 transition-all duration-200 focus-within:border-amber-500 focus-within:bg-white focus-within:shadow-lg focus-within:shadow-amber-500/10"
+          >
+            <div className="relative hidden border-r border-slate-200 md:block">
+              <label htmlFor="search-scope" className="sr-only">
+                Limit search to a category
+              </label>
+              <select
+                id="search-scope"
+                value={searchScope}
+                onChange={(e) => setSearchScope(e.target.value)}
+                className="cursor-pointer appearance-none bg-transparent py-3 pl-4 pr-8 text-xs font-semibold text-slate-700 outline-none"
               >
                 <option value="all">All Categories</option>
-                <option value="software">Software Tools</option>
-                <option value="server">Server Credits</option>
-                <option value="hardware">Hardware Tools</option>
+                {menus.map((menu) => (
+                  <option key={menu.key} value={menu.key}>
+                    {menu.label}
+                  </option>
+                ))}
               </select>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-3.5 pointer-events-none" />
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             </div>
 
+            <label htmlFor="site-search" className="sr-only">
+              Search tools and files
+            </label>
             <input
-              type="text"
+              id="site-search"
+              ref={searchInputRef}
+              type="search"
               value={searchQuery}
-              onChange={(e) => setSearchQuery && setSearchQuery(e.target.value)}
-              placeholder="Search tools, activation keys, server credits..."
-              className="w-full text-xs px-4 py-2.5 bg-transparent outline-none text-slate-900 placeholder-slate-400 font-medium"
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search tools, flash files, schematics..."
+              className="w-full bg-transparent px-4 py-3 text-xs font-medium text-slate-900 placeholder-slate-400 outline-none [&::-webkit-search-cancel-button]:hidden"
             />
 
-            <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-5 py-2.5 text-xs transition-colors flex items-center gap-1.5">
-              <Search className="w-4 h-4" />
+            {searchQuery ? (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+                className="mr-1 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <kbd className="mr-2 hidden rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-400 lg:inline-block">
+                /
+              </kbd>
+            )}
+
+            <button
+              type="submit"
+              className="flex items-center gap-1.5 self-stretch bg-amber-500 px-5 text-xs font-bold text-slate-950 transition-colors hover:bg-amber-600"
+            >
+              <Search className="h-4 w-4" />
               <span className="hidden md:inline">Search</span>
             </button>
           </form>
 
-          {/* Quick Shortcuts */}
-          <div className="flex items-center justify-between w-full sm:w-auto gap-6 text-xs font-bold text-slate-700">
-            <Link href="/track-order" className="flex items-center gap-1.5 hover:text-amber-600 transition-colors">
-              <MapPin className="w-4 h-4 text-amber-500" />
-              <span>Track Order</span>
-            </Link>
-            <Link href="/deals" className="flex items-center gap-1.5 hover:text-amber-600 transition-colors">
-              <Percent className="w-4 h-4 text-amber-500" />
-              <span>Daily Deals</span>
-            </Link>
+          <div className="flex w-full items-center justify-between gap-6 text-xs font-bold text-slate-700 sm:w-auto sm:justify-end">
+            {quickLinks.map(({ label, href, icon }) => {
+              const Icon = QUICK_LINK_ICONS[icon] ?? LayoutGrid;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className="flex items-center gap-1.5 whitespace-nowrap transition-colors hover:text-amber-600"
+                >
+                  <Icon className="h-4 w-4 text-amber-500" />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      {/* 4. RED MARQUEE ANNOUNCEMENT STRIP */}
-      <div className="bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-white text-[11px] font-bold py-1.5 px-4 text-center tracking-wide flex items-center justify-center gap-2 shadow-inner">
-        <Zap className="w-3.5 h-3.5 text-amber-300 animate-pulse hidden sm:inline" />
-        <p className="truncate">
-          🔥 Automated 24/7 Server Credit Top-up Active! Get instant WhatsApp support before placing your order.
-        </p>
+      {/* 4. TICKER */}
+      <div
+        className={`overflow-hidden bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-[11px] font-bold text-white shadow-inner transition-all duration-300 ${
+          scrolled ? "max-h-0 opacity-0" : "max-h-10 opacity-100"
+        }`}
+      >
+        <div className="flex w-max animate-marquee py-1.5 hover:[animation-play-state:paused]">
+          {[0, 1].map((copy) => (
+            <div key={copy} className="flex shrink-0 items-center" aria-hidden={copy === 1}>
+              {site.ticker.map((item) => (
+                <span key={item} className="flex items-center gap-2 whitespace-nowrap px-6 tracking-wide">
+                  <Zap className="h-3.5 w-3.5 shrink-0 text-amber-300" />
+                  {item}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* 5. MOBILE DRAWER SLIDE-OVER */}
+      {/* 5. MOBILE DRAWER */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex">
-          <div 
-            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
-            onClick={() => setMobileMenuOpen(false)}
+        <div className="fixed inset-0 z-50 flex xl:hidden">
+          <div
+            className="fixed inset-0 animate-fade-in bg-slate-950/80 backdrop-blur-sm"
+            onClick={closeMobileMenu}
           />
-          <div className="relative bg-slate-950 w-4/5 max-w-xs h-full text-white p-6 flex flex-col justify-between shadow-2xl z-10 overflow-y-auto border-r border-slate-800">
+          <div
+            id="mobile-nav-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Main menu"
+            className="relative z-10 flex h-full w-4/5 max-w-xs animate-drawer-in flex-col justify-between overflow-y-auto border-r border-slate-800 bg-slate-950 p-6 text-white shadow-2xl"
+          >
             <div>
-              <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
-                <Link href="/" onClick={() => setMobileMenuOpen(false)} className="font-black text-xl tracking-wider flex items-center">
-                  <span className="text-amber-400">GSM</span>
-                  <span className="text-white">SERVER</span>
+              <div className="mb-6 flex items-center justify-between border-b border-slate-800 pb-4">
+                <Link href="/" onClick={closeMobileMenu} className="flex items-center gap-2.5">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-amber-400 to-yellow-600 text-slate-950">
+                    <Cpu className="h-4 w-4" />
+                  </span>
+                  <span className="text-lg font-black tracking-wider">
+                    <span className="text-amber-400">{site.brand.prefix}</span>
+                    <span className="text-white">{site.brand.suffix}</span>
+                  </span>
                 </Link>
-                <button 
-                  onClick={() => setMobileMenuOpen(false)} 
-                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900"
+                <button
+                  onClick={closeMobileMenu}
+                  aria-label="Close menu"
+                  className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-900 hover:text-white"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <div className="space-y-3 text-xs uppercase font-bold tracking-wider">
-                <Link href="/" onClick={() => setMobileMenuOpen(false)} className="block py-2 text-amber-400 border-b border-slate-800">
-                  Home
+              <div className="space-y-1 text-xs font-bold uppercase tracking-wider">
+                <Link
+                  href="/tools"
+                  onClick={closeMobileMenu}
+                  className={`flex items-center justify-between border-b border-slate-800 py-3 ${
+                    isActive("/tools") ? "text-amber-400" : "text-slate-200 hover:text-amber-400"
+                  }`}
+                >
+                  All Tools
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
 
-                {/* Mobile Accordion 1 - Hardware */}
-                <div className="border-b border-slate-800 pb-2">
-                  <button 
-                    onClick={() => toggleSubMenu("hardware")} 
-                    className="w-full flex items-center justify-between py-2 text-slate-200 hover:text-amber-400"
-                  >
-                    <span>Mobile Hardware Tool</span>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${openSubMenu === "hardware" ? "rotate-180" : ""}`} />
-                  </button>
-                  {openSubMenu === "hardware" && (
-                    <div className="pl-4 pt-2 space-y-2 text-[11px] text-slate-400 font-medium normal-case">
-                      <Link href="/category/hardware/microscopes" onClick={() => setMobileMenuOpen(false)} className="block hover:text-amber-400">Microscopes</Link>
-                      <Link href="/category/hardware/soldering-stations" onClick={() => setMobileMenuOpen(false)} className="block hover:text-amber-400">Soldering Stations</Link>
-                      <Link href="/category/hardware/programmers" onClick={() => setMobileMenuOpen(false)} className="block hover:text-amber-400">Programmers</Link>
-                    </div>
-                  )}
-                </div>
+                {menus.map((menu) => (
+                  <div key={menu.key} className="border-b border-slate-800">
+                    <button
+                      onClick={() => toggleSubMenu(menu.key)}
+                      aria-expanded={openSubMenu === menu.key}
+                      aria-controls={`mobile-submenu-${menu.key}`}
+                      className={`flex w-full items-center justify-between py-3 text-left ${
+                        isActive(menu.href) ? "text-amber-400" : "text-slate-200 hover:text-amber-400"
+                      }`}
+                    >
+                      <span>
+                        {menu.label}
+                        <span className="ml-2 text-[10px] font-bold text-slate-500">{menu.count}</span>
+                      </span>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform duration-200 ${
+                          openSubMenu === menu.key ? "rotate-180 text-amber-400" : ""
+                        }`}
+                      />
+                    </button>
+                    {openSubMenu === menu.key && (
+                      <div
+                        id={`mobile-submenu-${menu.key}`}
+                        className="space-y-1 border-l border-slate-800 pb-3 pl-4 text-[11px] font-medium normal-case text-slate-400"
+                      >
+                        {menu.items.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={closeMobileMenu}
+                            className="flex items-center justify-between py-1.5 transition-colors hover:text-amber-400"
+                          >
+                            {item.label}
+                            <span className="text-[10px] text-slate-600">{item.count}</span>
+                          </Link>
+                        ))}
+                        <Link
+                          href={menu.href}
+                          onClick={closeMobileMenu}
+                          className="flex items-center gap-1.5 py-1.5 font-bold text-amber-400"
+                        >
+                          View all <ArrowRight className="h-3 w-3" />
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                ))}
 
-                {/* Mobile Accordion 2 - Server */}
-                <div className="border-b border-slate-800 pb-2">
-                  <button 
-                    onClick={() => toggleSubMenu("server")} 
-                    className="w-full flex items-center justify-between py-2 text-slate-200 hover:text-amber-400"
-                  >
-                    <span>Server Service</span>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${openSubMenu === "server" ? "rotate-180" : ""}`} />
-                  </button>
-                  {openSubMenu === "server" && (
-                    <div className="pl-4 pt-2 space-y-2 text-[11px] text-slate-400 font-medium normal-case">
-                      <Link href="/category/server-services/samsung-frp" onClick={() => setMobileMenuOpen(false)} className="block hover:text-amber-400">Samsung FRP Credits</Link>
-                      <Link href="/category/server-services/xiaomi-credits" onClick={() => setMobileMenuOpen(false)} className="block hover:text-amber-400">Xiaomi Credits</Link>
-                      <Link href="/category/server-services/oppo-realme" onClick={() => setMobileMenuOpen(false)} className="block hover:text-amber-400">Oppo / Realme Server</Link>
-                    </div>
-                  )}
+                <div className="grid grid-cols-2 gap-2 pt-4">
+                  {quickLinks.map(({ label, href, icon }) => {
+                    const Icon = QUICK_LINK_ICONS[icon] ?? LayoutGrid;
+                    return (
+                      <Link
+                        key={href}
+                        href={href}
+                        onClick={closeMobileMenu}
+                        className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2.5 text-[10px] text-slate-300 transition-colors hover:border-amber-500/50 hover:text-amber-400"
+                      >
+                        <Icon className="h-4 w-4 shrink-0 text-amber-500" />
+                        {label}
+                      </Link>
+                    );
+                  })}
                 </div>
-
-                {/* Mobile Accordion 3 - Software */}
-                <div className="border-b border-slate-800 pb-2">
-                  <button 
-                    onClick={() => toggleSubMenu("software")} 
-                    className="w-full flex items-center justify-between py-2 text-slate-200 hover:text-amber-400"
-                  >
-                    <span>Software Box</span>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${openSubMenu === "software" ? "rotate-180" : ""}`} />
-                  </button>
-                  {openSubMenu === "software" && (
-                    <div className="pl-4 pt-2 space-y-2 text-[11px] text-slate-400 font-medium normal-case">
-                      <Link href="/category/software-tools/unlocktool" onClick={() => setMobileMenuOpen(false)} className="block hover:text-amber-400">UnlockTool License</Link>
-                      <Link href="/category/software-tools/borneo" onClick={() => setMobileMenuOpen(false)} className="block hover:text-amber-400">Borneo Schematics</Link>
-                      <Link href="/category/software-tools/umt-dongle" onClick={() => setMobileMenuOpen(false)} className="block hover:text-amber-400">UMT Dongle / Box</Link>
-                    </div>
-                  )}
-                </div>
-
-                <Link href="/flash-files" onClick={() => setMobileMenuOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400 border-b border-slate-800">
-                  Flash Files
-                </Link>
               </div>
             </div>
 
-            <div className="pt-6 border-t border-slate-800 text-xs text-slate-400 space-y-3">
-              <Link href="/auth/signin" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 text-amber-400 font-bold">
-                <User className="w-4 h-4" /> Sign In / Register
-              </Link>
-              <a href="tel:+918923744131" className="block text-[11px] hover:text-white">Help desk: +91 89237 44131</a>
+            <div className="mt-8 space-y-3 border-t border-slate-800 pt-6 text-xs text-slate-400">
+              <a
+                href={site.phoneHref}
+                className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 py-2.5 font-bold text-slate-950 shadow-lg shadow-amber-500/20 transition-all hover:brightness-110"
+              >
+                <PhoneCall className="h-4 w-4" /> {site.phone}
+              </a>
+              <p className="text-center text-[11px]">Help desk open 24/7 — no account needed</p>
             </div>
           </div>
         </div>
